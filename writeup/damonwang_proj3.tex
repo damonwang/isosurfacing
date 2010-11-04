@@ -68,6 +68,23 @@ correlates with density, transitions between materials appear as sudden changes
 in opacity. Right at the transition, the gradient has large magnitude, so the
 foot and then the bones are outlined in white.
 
+\section{Isocontours}
+
+\explain{What heuristic did you use to make sure that you consistently handled
+the ambiguous cases?}
+
+I drew lines to keep the positive (above isovalue) corners connected within the
+square.
+
+\explain{How are you making sure that the isocontour is drawn in the right
+place, and with a constant thickness, even while the image is transformed for
+display?}
+
+Instead of specifying the isocontour in index space and letting SVG's
+transformation stretch it along one axis, I manually transform the isocontour
+into world space using the appropriate $\vec M$. For an image with aspect ratio
+$x:y$, $\vec M = [ x, 0 ; 0, y ]$.
+
 \end{document}
 
 
