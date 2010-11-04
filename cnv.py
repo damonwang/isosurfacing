@@ -5,6 +5,9 @@ import numpy as np
 import Image
 import code
 import os
+import collections
+import itertools
+from pysvg import builders
 
 #==============================================================================
 # General
@@ -15,13 +18,13 @@ class Options(dict):
     def __getattr__(self, name):
         return self.__getitem__(name)
 
-
 images = Options(cone=Options(fname='data/cone.png', aspect=(1, 1)),
         point=Options(fname='data/point.png', aspect=(1, 1)),
         rings=Options(fname='data/rings.png', aspect=(1, 3)),
         feeth=Options(fname='data/feeth.png', aspect=(1, 1.39)),
         mich=Options(fname='data/mich.png', aspect=(1, 1)),
         teddy=Options(fname='data/teddy.png', aspect=(1, 3.61)),
+        noise=Options(fname='data/noise.png', aspect=(1,1)),
         tooth=Options(fname='data/tooth.png', aspect=(1, 1)))
 
 def png_to_ndarray(filename): # pragma: no cover
@@ -195,7 +198,7 @@ def part1a(filename='data/rings.png', saveas='output/part1a/', aspect=(1,3)):
     '''
 
     data = png_to_ndarray(filename)
-    os.mkdir(saveas)
+    if not os.path.exists(saveas): os.mkdir(saveas)
 
     Image.fromarray(igreyscale(x_partial(data).astype('int32')), mode='I').save(saveas + 'dx.png')
     Image.fromarray(igreyscale(y_partial(data).astype('int32')), mode='I').save(saveas + 'dy.png')
@@ -207,6 +210,7 @@ def part1b(files=None, saveas='output/part1b/'):
         filename-gm.png for the univariate gradient 
     '''
 
+    if not os.path.exists(saveas): os.mkdir(saveas)
     files = files or [ images.cone, images.point, images.feeth ]
 
     for f in files:
@@ -237,3 +241,99 @@ def grid(data):
         for c in xrange(cols - 1):
             yield data[r:r+2,c:c+2]
 
+# these lambdas were the fastest way to recover from discovering that Techstaff
+# runs Python 2.5.2 which doesn't support named tuples
+Line = lambda *args: tuple(args)
+Side = lambda *args: tuple(args)
+T = Side(np.array((0,0)), np.array((0,1)))
+L = Side(np.array((0,0)), np.array((1,0)))
+R = Side(np.array((0,1)), np.array((1,1)))
+B = Side(np.array((1,0)), np.array((1,1)))
+
+lookup = { (False, False, False, False) : [],
+        (False, False, False, True) : [ Line(R, B) ],
+        (False, False, True, False) : [ Line(L, B) ],
+        (False, False, True, True) : [ Line(L, R) ],
+        (False, True, False, False) : [ Line(T, R) ],
+        (False, True, False, True) : [ Line(T, B) ],
+        (False, True, True, False) : [ Line(T, L), Line(R, B) ],
+        (False, True, True, True) : [ Line(T, L) ],
+        (True, False, False, False) : [ Line(T, L) ],
+        (True, False, False, True) : [ Line(T, R), Line(L, B) ],
+        (True, False, True, False) : [ Line(T, B) ],
+        (True, False, True, True) : [ Line(T, R) ],
+        (True, True, False, False) : [ Line(L, R) ],
+        (True, True, False, True) : [ Line(L, B) ],
+        (True, True, True, False) : [ Line(R, B) ],
+        (True, True, True, True) : [] }
+
+def cartesian(*args, **kwds):
+    '''re-implementation of itertools.product() as described in manual'''
+
+    pools = map(tuple, args) * kwds.get('repeat', 1)
+    result = [[]]
+    for pool in pools:
+        result = [x+[y] for x in result for y in pool] 
+    for prod in result:
+        yield tuple(prod)
+
+
+def draw_lines(data, val):
+    '''draw_lines(ndarray data, val) -> [ Line ]
+
+    Runs marching squares and returns a list of the Lines to be drawn
+    '''
+
+    lines = []
+    r, c = data.shape
+    for i, j in cartesian(xrange(r-1), xrange(c-1)):
+        top_left = np.array((i, j))
+        for l in lookup[tuple((data[i:i+2,j:j+2] > val).flatten())]:
+            points = []
+            for s in l:
+                # calculate a weight, and then use it to average the given points
+                weight = (val - data[i+s[0][0],j+s[0][1]]) / (data[i+s[1][0], j+s[1][1]] - data[i+s[0][0], j+s[0][1]])
+                #code.interact(local=locals())
+                points.append(top_left + s[0] + weight*(s[1] - s[0]))
+                print Options(top_left=top_left, s=s, weight=weight)
+            lines.append(Line(*points))
+    return lines
+
+def test_lines():
+    for i in cartesian([False, True], repeat=4):
+        g = np.array(i, dtype='int32').reshape((2,2))
+        yield (g, draw_lines(g, .5))
+
+def overlay_isocontours(dataset, isovalues, name, scale=1):
+    aspect = scale * np.array(dataset.aspect)
+    data = png_to_ndarray(dataset.fname)
+    shb = builders.ShapeBuilder()
+    out = builders.svg(name)
+    img = builders.image(x=0, y=0, width=data.shape[1], height=data.shape[0])
+    img.set_xlink_href(os.path.abspath(dataset.fname))
+    grp = builders.g()
+    grp.set_transform("scale(%f, %f)" % tuple(aspect))
+    grp.addElement(img)
+    out.addElement(grp)
+    for val in isovalues:
+        for l in draw_lines(data, val):
+            l = [ np.array([scale/2, scale/2]) + aspect[::-1] * p for p in l ]
+            out.addElement(shb.createLine(l[1][1], l[1][0], l[0][1], l[0][0], strokewidth=2, stroke="rgb(0,255,0)"))
+    return out
+
+
+
+#==============================================================================
+# Run these functions to solve Part 2
+
+def part2a(dataset=images.noise, value=40000., saveas="output/part2a/"):
+    if not os.path.exists(saveas): os.mkdir(saveas)
+    overlay_isocontours(dataset, [value], 'noise-lines', scale=37.5).save(saveas + 'noise-lines.svg')
+
+def part2b(dataset=images.rings, value=32000, saveas='output/part2b/'):
+    if not os.path.exists(saveas): os.mkdir(saveas)
+    overlay_isocontours(dataset, [value], 'rings-lines', scale=1.).save(saveas + 'rings-lines.svg')
+
+def part2c(dataset=images.mich, values=np.linspace(0,65535., num=10), saveas="output/part2c/"):
+    if not os.path.exists(saveas): os.mkdir(saveas)
+    overlay_isocontours(dataset, values, 'mich-lines', scale=1.).save(saveas + 'mich-lines.svg')
