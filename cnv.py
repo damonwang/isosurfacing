@@ -6,8 +6,15 @@ import Image
 import code
 import os
 
-first_d = np.array([-.5, 0, .5])
-second_d = np.array([1., -2., 1.])
+#==============================================================================
+# General
+
+class Options(dict):
+    '''a thin dict wrapper that aliases getitem to getattribute'''
+
+    def __getattr__(self, name):
+        return self.__getitem__(name)
+
 
 images = Options(cone=Options(fname='data/cone.png', aspect=(1, 1)),
         point=Options(fname='data/point.png', aspect=(1, 1)),
@@ -17,11 +24,27 @@ images = Options(cone=Options(fname='data/cone.png', aspect=(1, 1)),
         teddy=Options(fname='data/teddy.png', aspect=(1, 3.61)),
         tooth=Options(fname='data/tooth.png', aspect=(1, 1)))
 
-class Options(dict):
-    '''a thin dict wrapper that aliases getitem to getattribute'''
+def png_to_ndarray(filename): # pragma: no cover
+    '''png_to_ndarray(str filename) -> ndarray 
+    '''
 
-    def __getattr__(self, name):
-        return self.__getitem__(name)
+    im = Image.open(filename)
+    return np.array(im.getdata()).reshape(im.size[::-1])
+
+def index_to_world(data, M):
+    '''index_to_world(ndarray data, matrix M) -> ndarray
+    '''
+
+    M = M.I.T
+    M = np.array([M[0,0], M[1,1]])
+
+    return np.array([ [ M * col for col in row ] for row in data ])
+
+#==============================================================================
+# Part 1 functions
+
+first_d = np.array([-.5, 0, .5])
+second_d = np.array([1., -2., 1.])
 
 def embed(data, n):
     '''embed(ndarray data, int n) -> ndarray result
@@ -87,22 +110,6 @@ def convolve_png(filename, kernel, **kwargs):
     if options.saveas is not None: 
         Image.fromarray(colored, mode=mode).save(options.saveas)
     return conv
-
-def png_to_ndarray(filename): # pragma: no cover
-    '''png_to_ndarray(str filename) -> ndarray 
-    '''
-
-    im = Image.open(filename)
-    return np.array(im.getdata()).reshape(im.size[::-1])
-
-def index_to_world(data, M):
-    '''index_to_world(ndarray data, matrix M) -> ndarray
-    '''
-
-    M = M.I.T
-    M = np.array([M[0,0], M[1,1]])
-
-    return np.array([ [ M * col for col in row ] for row in data ])
 
 def igreyscale(data, max=65535):
     '''igreyscale(ndarray data) -> ndarray
@@ -180,7 +187,7 @@ def grad_mag(data, aspect):
     return grad(world_dx, world_dy)
 
 #==============================================================================
-# Project-Specific Functions
+# Run these functions to solve Part 1
 
 def part1a(filename='data/rings.png', saveas='output/part1a/', aspect=(1,3)):
     '''Writes out three PNGs giving the x-partial, y-partial, and gradient
@@ -188,6 +195,7 @@ def part1a(filename='data/rings.png', saveas='output/part1a/', aspect=(1,3)):
     '''
 
     data = png_to_ndarray(filename)
+    os.mkdir(saveas)
 
     Image.fromarray(igreyscale(x_partial(data).astype('int32')), mode='I').save(saveas + 'dx.png')
     Image.fromarray(igreyscale(y_partial(data).astype('int32')), mode='I').save(saveas + 'dy.png')
@@ -209,4 +217,23 @@ def part1b(files=None, saveas='output/part1b/'):
         Image.fromarray(lin_bivariate(dx, dy).astype('uint8'), mode='RGB').save(out_prefix + '-biv.png')
 
         Image.fromarray(lin_univariate(grad_mag(data, f.aspect), np.array([255, 255, 255])).astype('uint8'), mode='RGB').save(out_prefix + '-gm.png')
+
+#==============================================================================
+# Functions for Part 2
+
+def grid(data):
+    '''grid(ndarray data) -> generator
+
+    This description discusses a 2D array. Higher dimensional arrays are
+    handled by considering them as 2D arrays where each element is itself an
+    ndarray object.
+
+    iterates over the data one grid square at a time, where a grid square is
+    a view with the four points at indices (i, j) (i, j+1) (i+1, j) (i+1, j+1)
+    '''
+
+    rows, cols = data.shape[:2]
+    for r in xrange(rows - 1):
+        for c in xrange(cols - 1):
+            yield data[r:r+2,c:c+2]
 

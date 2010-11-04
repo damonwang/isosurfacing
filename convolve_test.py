@@ -42,13 +42,22 @@ class TestEmbed(unittest.TestCase):
         '''part1a on the head'''
 
         tempdir = tempfile.mkdtemp(prefix='scivis')
-        saveas=join(tempdir, 'part1a')
+        saveas=join(tempdir, 'part1a/')
         cnv.part1a(filename='data/head-16.png', saveas=saveas, aspect=(1,1))
         for op in ['dx', 'dy', 'gm']:
             self.assertArraysSimilar(1, 
                     cnv.png_to_ndarray('data/head-%s.png' % op), 
-                    cnv.igreyscale(cnv.png_to_ndarray('%s-%s.png' % (saveas, op)), max=255))
+                    cnv.igreyscale(cnv.png_to_ndarray('%s/%s.png' % (saveas, op)), max=255))
         rmtree(tempdir)
+
+    def test_grid(self):
+        '''grid'''
+
+        expected = [np.array([[0, 1], [3, 4]]), np.array([[1, 2], [4, 5]]),
+                np.array([[3, 4], [6, 7]]), np.array([[4, 5], [7, 8]])]
+
+        for g, e in zip(cnv.grid(np.arange(9).reshape((3,3))), expected):
+            self.assertArraysSimilar(0, g, e)
 
 if __name__ == '__main__': 
     tests = [ unittest.TestLoader().loadTestsFromTestCase(v)
