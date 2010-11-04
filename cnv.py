@@ -8,6 +8,7 @@ import os
 import collections
 import itertools
 from pysvg import builders
+from multiprocessing import Pool
 
 #==============================================================================
 # General
@@ -315,10 +316,10 @@ def overlay_isocontours(dataset, isovalues, name, scale=1):
     grp.set_transform("scale(%f, %f)" % tuple(aspect))
     grp.addElement(img)
     out.addElement(grp)
-    for val in isovalues:
-        for l in draw_lines(data, val):
-            l = [ np.array([scale/2, scale/2]) + aspect[::-1] * p for p in l ]
-            out.addElement(shb.createLine(l[1][1], l[1][0], l[0][1], l[0][0], strokewidth=2, stroke="rgb(0,255,0)"))
+    if not hasattr(overlay_isocontours, 'workers'): setattr(overlay_isocontours, 'workers', Pool())
+    for l in itertools.chain(overlay_isocontours.workers.map(lambda val: draw_lines(data, val), isovalues)):
+        l = [ np.array([scale/2, scale/2]) + aspect[::-1] * p for p in l ]
+        out.addElement(shb.createLine(l[1][1], l[1][0], l[0][1], l[0][0], strokewidth=2, stroke="rgb(0,255,0)"))
     return out
 
 
