@@ -9,6 +9,7 @@ import collections
 import itertools
 from pysvg import builders
 from multiprocessing import Pool
+import sys
 
 #==============================================================================
 # General
@@ -278,8 +279,7 @@ def cartesian(*args, **kwds):
     for prod in result:
         yield tuple(prod)
 
-
-def draw_lines(data, val):
+def draw_lines(data, val, origin=np.array([0,0])):
     '''draw_lines(ndarray data, val) -> [ Line ]
 
     Runs marching squares and returns a list of the Lines to be drawn
@@ -288,7 +288,7 @@ def draw_lines(data, val):
     lines = []
     r, c = data.shape
     for i, j in cartesian(xrange(r-1), xrange(c-1)):
-        top_left = np.array((i, j))
+        top_left = np.array((i, j)) + origin
         for l in lookup[tuple((data[i:i+2,j:j+2] > val).flatten())]:
             points = []
             for s in l:
@@ -296,9 +296,31 @@ def draw_lines(data, val):
                 weight = (val - data[i+s[0][0],j+s[0][1]]) / (data[i+s[1][0], j+s[1][1]] - data[i+s[0][0], j+s[0][1]])
                 #code.interact(local=locals())
                 points.append(top_left + s[0] + weight*(s[1] - s[0]))
-                print Options(top_left=top_left, s=s, weight=weight)
+                #print Options(top_left=top_left, s=s, weight=weight)
             lines.append(Line(*points))
     return lines
+
+def mp_wrap_draw_lines(args):
+    '''unpacks args for draw_lines'''
+
+    (data, origin), values = args
+    return itertools.chain(*[draw_lines(data, val, origin=origin) for val in values])
+
+def data_chunks(data, chunksize=100):
+    '''breaks ndarray data into many overlapping horizontal stripes.'''
+
+    rows = data.shape[0]
+    for i in xrange(0, rows, chunksize):
+        yield (data[i:i+chunksize+1], np.array([i, 0]))
+
+MP_PROCMAX = None
+MP_THRESH = 1000000
+
+def mp_draw_isocontours(data, isovalues):
+    if data.nbytes > MP_THRESH:
+        workers = Pool(MP_PROCMAX)
+        return itertools.chain(*workers.map(mp_wrap_draw_lines, [ (chunk, isovalues) for chunk in data_chunks(data, chunksize=len(data)/MP_PROCMAX)]))
+    else: return itertools.chain(*[draw_lines(data, val) for val in isovalues ])
 
 def test_lines():
     for i in cartesian([False, True], repeat=4):
@@ -316,9 +338,10 @@ def overlay_isocontours(dataset, isovalues, name, scale=1):
     grp.set_transform("scale(%f, %f)" % tuple(aspect))
     grp.addElement(img)
     out.addElement(grp)
-    if not hasattr(overlay_isocontours, 'workers'): setattr(overlay_isocontours, 'workers', Pool())
-    for l in itertools.chain(overlay_isocontours.workers.map(lambda val: draw_lines(data, val), isovalues)):
-        l = [ np.array([scale/2, scale/2]) + aspect[::-1] * p for p in l ]
+    translation = np.array([.5, .5])
+    #for l in itertools.chain(overlay_isocontours.workers.map(LineDrawer(data), isovalues)):
+    for l in mp_draw_isocontours(data, isovalues):
+        l = [ aspect[::-1] * (p + translation) for p in l ]
         out.addElement(shb.createLine(l[1][1], l[1][0], l[0][1], l[0][0], strokewidth=2, stroke="rgb(0,255,0)"))
     return out
 
@@ -335,6 +358,12 @@ def part2b(dataset=images.rings, value=32000, saveas='output/part2b/'):
     if not os.path.exists(saveas): os.mkdir(saveas)
     overlay_isocontours(dataset, [value], 'rings-lines', scale=1.).save(saveas + 'rings-lines.svg')
 
-def part2c(dataset=images.mich, values=np.linspace(0,65535., num=10), saveas="output/part2c/"):
+def part2c(dataset=images.mich, values=np.linspace(0,65535., num=100), saveas="output/part2c/"):
     if not os.path.exists(saveas): os.mkdir(saveas)
     overlay_isocontours(dataset, values, 'mich-lines', scale=1.).save(saveas + 'mich-lines.svg')
+
+if __name__ == '__main__':
+    if len(sys.argv) > 1:
+        MP_PROCMAX = int(sys.argv[1])
+
+    part2c()
