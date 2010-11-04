@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="ISO-8859-1" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" x="feeth" 
+  xmlns:xlink="http://www.w3.org/1999/xlink"  >
+  <g transform="scale(1,1.39)" >
+    <image xlink:href="../data/feeth.png" height="256" width="350" y="0" x="0" />
+  </g>
+</svg>

@@ -1,0 +1,74 @@
+\documentclass[oldfontcommands]{memoir} 
+\usepackage{fullpage}
+\usepackage{url}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{fancyvrb}
+\usepackage{color}
+\usepackage{listings}
+\usepackage{utopia}
+\lstset{fancyvrb=true}
+\lstset{ 
+  basicstyle=\small\tt,
+  keywordstyle=\color{blue},
+  identifierstyle=,
+  commentstyle=\color{green},
+  stringstyle=\color{red},
+  showstringspaces=false,
+  tabsize=3,
+  numbers=left,
+  captionpos=b,
+  numberstyle=\tiny
+  %stepnumber=4
+  }
+
+% TODO subfigures using subfig
+
+\let\oldhat\hat
+\renewcommand{\vec}[1]{\mathbf{#1}}
+\renewcommand{\hat}[1]{\oldhat{\vec{#1}}}
+
+\newcommand{\explain}[1]{\paragraph{Explain:} \emph{#1}}
+
+
+\title{CMSC 23710 Project 3: Derivatives and Isocontours}
+\author{Damon Wang}
+\date{2 November 2010}
+
+\setcounter{secnumdepth}{2}
+
+\begin{document}\tightlists
+
+\maketitle
+
+\section{Aspect ratios}
+
+\begin{figure}
+  \small
+  \lstinputlisting[language=XML]{../svg/teddy.svg}
+  \lstinputlisting[language=XML]{../svg/feeth.svg}
+  \normalsize\caption{SVG to correct the aspect ratios on \texttt{teddy.png} and \texttt{feeth.png}}
+\end{figure}
+
+\section{Derivatives}
+
+\explain{Knowing that the rings here are circular, how are you
+able to assess the correctness of your result?}
+
+Since the rings are circular, the magnitude of the gradient should be radially
+symmetric and the plot of $\frac{\partial}{\partial x}$ should match that of
+$\frac{\partial}{\partial y}$ up to a $90^\circ$ rotation. Just by visual
+inspection, my results seem to meet both conditions.
+
+\explain{In the CT foot data, what properties or features are made more visible
+by either of these derivative images?}
+
+The gradient visualisation makes edges more visible. Since X-ray opacity roughly
+correlates with density, transitions between materials appear as sudden changes
+in opacity. Right at the transition, the gradient has large magnitude, so the
+foot and then the bones are outlined in white.
+
+\end{document}
+
+
+% vim: tw=80
