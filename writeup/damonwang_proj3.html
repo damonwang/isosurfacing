@@ -1,0 +1,140 @@
+<html><body>
+    <pre>
+CMSC 23710 Project 3: Derivatives and Isocontours
+Damon Wang
+2 November 2010
+
+My code is in the cnv.py file.
+
+Part 1: Derivatives
+
+EXPLAIN: Knowing that the rings here are circular, how are you
+able to assess the correctness of your result?
+
+Since the rings are circular, the magnitude of the gradient should be radially
+symmetric and the plot of d/dx should match that of d/dy up to a 90 degree
+rotation. Just by visual inspection, my results seem to meet both conditions.
+
+EXPLAIN: In the CT foot data, what properties or features are made more visible
+by either of these derivative images?
+
+The gradient visualisation makes edges more visible. Since X-ray opacity roughly
+correlates with density, transitions between materials appear as sudden changes
+in opacity. Right at the transition, the gradient has large magnitude, so the
+foot and then the bones are outlined in white.
+
+Part 2: Isocontours
+
+EXPLAIN: What heuristic did you use to make sure that you consistently handled
+the ambiguous cases?
+
+I drew lines to keep the positive (above isovalue) corners connected within the
+square.
+
+EXPLAIN: How are you making sure that the isocontour is drawn in the right
+place, and with a constant thickness, even while the image is transformed for
+display?
+
+Instead of specifying the isocontour in index space and letting SVG's
+transformation stretch it along one axis, I manually transform the isocontour
+into world space using the appropriate M. If the aspect ratio is x:y,
+then M = [ x, 0 ; 0 , y ].
+
+EXPLAIN: What is an advantage and a disadvantage of using a constant thickness
+isocontour for the coast-line, versus the band of varying width you created
+with a colormap before?
+
+The advantage is that the constant thickness makes the coastline more
+immediately recognizable as an artificially imposed boundary with a specific
+meaning. With a varying-width band, the viewer might have thought that it
+represented, say, the elevation of coastal plains. 
+
+The disadvantage is that the local steepness near the coastline, previously
+conveyed by the narrowness of the band, is lost.
+
+EXPLAIN: How did you decide how many isocontours to include (i.e. what was the
+judgement you were making, or wanting to allow the viewer to make, that guided
+your choice?) 
+
+I wanted the show the variation in depth of Lake Michigan and Lake Huron, which
+was not adequately conveyed by the colormap itself. At this scale, the map
+would not be used for navigation anyway, so I was not concerned with letting
+the viewer trace particular depths; it was more important to show the relative
+steepness of the lakebed via the separation between isocontours. I think my
+visualisation makes it easy to pick out, for example, how jagged the Michigan
+lakebed becomes near the northwestern part of Michigan compared toe the
+southern end of the lake.
+
+I omitted the isocontours on land because it seemed that the color mapping was
+showing the elevations adequately there. I was also afraid of obscuring the
+pale blue traces indicating rivers.
+
+EXPLAIN: For each of the visualizations, write a few sentences about what
+structures or materials are shown, and how. 
+
+For the feeth visualisation, my goal was to let the viewer pick out the
+skeleton, so I chose a low isovalue to show the skin boundary and a few high
+isovalues to show the bone. The hue is assigned by isovalue to clearly
+distinguish the two tissues, while the saturation and width are assigned
+according to the local gradient magnitude, which helps distinguish true
+boundaries such as the triangular piece in the ankle from the false boundaries
+created by variation in bone density within, say, the heel.
+
+I also tried to show the difference between muscle and fat, but was unable to do
+so without absurdly large sets of isovalues (about thirty), due to the large
+variation in density across these tissues.
+
+For the tooth visualisation, I wanted to distinguish the three tissues of
+enamel, dentin, and pulp, which I did using three colors.
+
+For the teddy visualisation, I wanted to show the overall shape of the object,
+since there was little variation in material and I could not find any plausible
+reason to make a visualisation that specifically distinguished the cloth from
+the eyes and nose, especially when the visualisation I did create also
+accomplished that goal.
+
+Since most of the bear was constructed from the same material, the recorded
+differences in opacity should correspond to thickness of material encountered, 
+which could be due to either a seam or to the ray just barely grazing the edge
+of the material. Fortunately, we're good at distinguishing the two cases, so
+I just picked several isovalues and assigned isocontour width according to the
+gradient magnitude.
+
+SVGs for Part 0: 
+    </pre>
+<iframe src="../svg/teddy.svg" width="411" height="226"></iframe>
+<iframe src="../svg/feeth.svg" width="350" height="355"></iframe>
+
+<pre> SVGs for Part 1a: dx, dy, and gradient-magnitude</pre>
+<iframe src="../output/part1a/dx.svg" width="225" height="225"></iframe>
+<iframe src="../output/part1a/dy.svg" width="225" height="225"></iframe>
+<iframe src="../output/part1a/gm.svg" width="225" height="225"></iframe>
+
+<pre>SVGs for Part 1b:cone, point, and feet</pre>
+<iframe src="../output/part1b/cone-biv.svg" width="100" height="100"></iframe>
+<iframe src="../output/part1b/point-biv.svg" width="100" height="100"></iframe>
+<iframe src="../output/part1b/feeth-biv.svg" width="350" height="355"></iframe>
+<br />
+<iframe src="../output/part1b/cone-gm.svg" width="100" height="100"></iframe>
+<iframe src="../output/part1b/point-gm.svg" width="100" height="100"></iframe>
+<iframe src="../output/part1b/feeth-gm.svg" width="350" height="355"></iframe>
+
+<pre>SVGs for part 2a: noise</pre>
+<iframe src="../output/part2a/noise-lines.svg" width="300" height="300"></iframe>
+
+<pre>SVGs for part 2b: rings</pre>
+<iframe src="../output/part2b/rings-lines.svg" width="225" height="225"></iframe>
+
+<pre>SVGs for part 2c: mich</pre>
+<iframe src="../output/part2c/mich-lines.svg" width="375" height="399"></iframe>
+
+<pre>SVGs for part 2d: feeth</pre>
+<iframe src="../output/part2d/feeth-lines.svg" width="350" height="355"></iframe>
+
+<pre>SVGs for part 2e: tooth</pre>
+<iframe src="../output/part2e/tooth-lines.svg" width="94" height="161"></iframe>
+
+<pre>SVGs for part 2f: teddy</pre>
+<iframe src="../output/part2f/teddy-lines.svg" width="411" height="226"></iframe>
+</body></html>
+    
