@@ -210,8 +210,11 @@ def part1a(filename='data/rings.png', saveas='output/part1a/', aspect=(1,3)):
     if not os.path.exists(saveas): os.mkdir(saveas)
 
     Image.fromarray(igreyscale(x_partial(data).astype('int32')), mode='I').save(saveas + 'dx.png')
+    write_svg(Options(fname=saveas + 'dx.png', aspect=images.rings.aspect), 'rings-dx').save(saveas + 'dx.svg')
     Image.fromarray(igreyscale(y_partial(data).astype('int32')), mode='I').save(saveas + 'dy.png')
+    write_svg(Options(fname=saveas + 'dy.png', aspect=images.rings.aspect), 'rings-dy').save(saveas + 'dy.svg')
     Image.fromarray(igreyscale(grad_mag(data, aspect).astype('int32')), mode='I').save(saveas + 'gm.png')
+    write_svg(Options(fname=saveas + 'gm.png', aspect=images.rings.aspect), 'rings-gm').save(saveas + 'gm.svg')
 
 def part1b(files=None, saveas='output/part1b/'):
     '''writes out two PNGs per filename: 
@@ -228,8 +231,14 @@ def part1b(files=None, saveas='output/part1b/'):
 
         dx, dy = index_to_world(nabla(data), M(*f.aspect)).transpose(2, 0, 1)
         Image.fromarray(lin_bivariate(dx, dy).astype('uint8'), mode='RGB').save(out_prefix + '-biv.png')
+        write_svg(Options(fname=out_prefix + '-biv.png',
+            aspect=f.aspect), os.path.basename(out_prefix) +
+            '-biv').save(out_prefix + '-biv.svg')
 
         Image.fromarray(lin_univariate(grad_mag(data, f.aspect), np.array([255, 255, 255])).astype('uint8'), mode='RGB').save(out_prefix + '-gm.png')
+        write_svg(Options(fname=out_prefix + '-gm.png',
+            aspect=f.aspect), os.path.basename(out_prefix) +
+            '-gm').save(out_prefix + '-gm.svg')
 
 #==============================================================================
 # Functions for Part 2
@@ -355,49 +364,136 @@ def overlay_isocontours(dataset, isovalues, svg, **kwargs):
             svg.addElement(shb.createLine(l[1][1], l[1][0], l[0][1], l[0][0], strokewidth=width, stroke=color))
     return svg
 
+shb = builders.ShapeBuilder()
+def make_line(l, width=1, color="rgb(0,255,0)"): 
+    return shb.createLine(l[1][1], l[1][0], l[0][1], l[0][0], strokewidth=width, stroke=color)
 
+def param_isocontours(dataset, isovalues, f, scale=1., **kwargs):
+    '''param_isocontours(Options dataset, list isovalues, function (Line line, isovalue, (i,j) -> A) f) yields A 
+
+    Computes the line segments for each isocontour and calls f with these arguments:
+    Line line: the line segment
+    isovalue
+    tuple (i,j): the indices of the top left corner of the grid square containing the line segment
+    '''
+
+    data = png_to_ndarray(dataset.fname)
+    lines = []
+    r, c = data.shape
+    aspect = scale * np.array(dataset.aspect)
+    shift = np.array([.5,.5])
+    for i, j in cartesian(xrange(r-1), xrange(c-1)):
+        top_left = np.array((i, j)) + shift
+        for val in isovalues:
+            for l in lookup[tuple((data[i:i+2,j:j+2] > val).flatten())]:
+                points = []
+                for s in l:
+                    # calculate a weight, and then use it to average the given points
+                    weight = (val - data[i+s[0][0],j+s[0][1]]) / (data[i+s[1][0], j+s[1][1]] - data[i+s[0][0], j+s[0][1]])
+                    #code.interact(local=locals())
+                    points.append(aspect[::-1] * (top_left + s[0] + weight*(s[1] - s[0])))
+                    #print Options(top_left=top_left, s=s, weight=weight)
+                yield f(Line(*points), val, (i,j))
+
+def hsl2rgb(h, s, l):
+    return "rgb(%d,%d,%d)" % ImageColor.getrgb("hsl(%d,%d%%,%d%%)" % (h,s,l))
+
+def mask(min, max):
+    return np.vectorize(lambda x: x if x > min and x < max else 0)
 
 #==============================================================================
 # Run these functions to solve Part 2
 
 def part2a(dataset=images.noise, value=40000., saveas="output/part2a/"):
     if not os.path.exists(saveas): os.mkdir(saveas)
-    svg = write_svg(dataset, 'noise-lines', scale=1.)
-    overlay_isocontours(dataset, [value], svg, scale=37.5).save(saveas + 'noise-lines.svg')
+    svg = write_svg(dataset, 'noise-lines', scale=37.5)
+    shb = builders.ShapeBuilder()
+    for line in param_isocontours(dataset, [value], lambda line, val, index: make_line(line), scale=37.5):
+        svg.addElement(line)
+    svg.save(saveas + 'noise-lines.svg')
+    #overlay_isocontours(dataset, [value], svg, scale=37.5).save(saveas + 'noise-lines.svg')
 
 def part2b(dataset=images.rings, value=32000, saveas='output/part2b/'):
     if not os.path.exists(saveas): os.mkdir(saveas)
     svg = write_svg(dataset, 'rings-lines', scale=1.)
-    overlay_isocontours(dataset, [value], svg, scale=1.).save(saveas + 'rings-lines.svg')
+    shb = builders.ShapeBuilder()
+    for line in param_isocontours(dataset, [value], lambda line, val, index: make_line(line)):
+        svg.addElement(line)
+    svg.save(saveas + 'rings-lines.svg')
+    #overlay_isocontours(dataset, [value], svg, scale=1.).save(saveas + 'rings-lines.svg')
 
-def part2c(dataset=images.mich_sml, values=None, saveas="output/part2c/"):
-    #values = list(values or np.linspace(0,65535., num=5))
-    #colors = [ "rgb(%d,%d,%d)" % ImageColor.getrgb("hsl(%d,100%%,50%%)" % c) for c in np.linspace(0,300,num=len(values)) ]
-    values = list(np.linspace(15000, 31700, num=5))
-    colors = [ "rgb(128,128,128)" ] * (len(values) - 1) + [ "rgb(0,0,0)" ]
-    widths = [1] * len(values)
-    widths[-1] = 2
+def part2c(dataset=images.mich, values=None, saveas="output/part2c/"):
+    def f(line, val, index):
+        if val == 31700:
+            return make_line(line, color="rgb(0,0,0)", width=2)
+        else: return make_line(line, color="rgb(128,128,128)")
+
     if not os.path.exists(saveas): os.mkdir(saveas)
-    prefix = '%s-lines' % os.path.basename(dataset.fname)[:-4]
     cm.rgb2image(cm.ColorMap.from_hsl_file('mich2b.txt')(cm.read_image(dataset.fname, color='grey'))).save('output/mich2b.png')
-    print "saved color"
-    svg = write_svg(Options(fname='output/mich2b.png', aspect=(1,1)), prefix, scale=1.)
-    overlay_isocontours(dataset, values, svg, scale=1., colors=colors,
-            widths=widths).save(saveas + prefix + '.svg')
+    svg = write_svg(Options(fname='output/mich2b.png', aspect=(1,1)), 'mich-lines', scale=1.)
+    for line in param_isocontours(dataset, values or list(np.linspace(15000, 31700, num=5)), f):
+        svg.addElement(line)
+    svg.save(saveas + 'mich-lines.svg')
+    return
 
-def part2d_feeth(dataset=images.feeth_sml, values=None, saveas="output/part2d/"):
-    values = [20000., 24800., 30000.]
-    colors = repeat("rgb(0,0,0)")
+def part2d(dataset=images.feeth, values=None, saveas="output/part2d/"):
+    MAXWIDTH = 3
+    #values = [20000., 24800., 30000.]
+    values = map(float, [20000, 32000, 35000, 40000])
+    colors = { 20000. : hsl2rgb(60,50,55), 
+            28000. : hsl2rgb(120,50,50),
+            29000. : hsl2rgb(180,50,50)}
+    gm = grad_mag(png_to_ndarray(dataset.fname), dataset.aspect)
+    gm_scale = 1. / gm.max()
+    def f(line, val, (i,j)):
+        width = gm[i:i+2,j:j+2].sum() * gm_scale / 4 * MAXWIDTH
+        color = hsl2rgb(60 if val < 30000 else 240, width * 100/MAXWIDTH, 50)
+        return make_line(line, color=color, width=width)
+        #return make_line(line, color=colors[val], width=0 + gm[i:i+2,j:j+2].sum()**2 * gm_scale)
+
     if not os.path.exists(saveas): os.mkdir(saveas)
-    #svg = write_svg(dataset, 'feeth-lines', scale=1.)
     svg = builders.svg('feeth-lines')
-    overlay_isocontours(dataset, values, svg, colors=colors).save(saveas + 'feeth-lines.svg')
+    for line in param_isocontours(dataset, values, f):
+        svg.addElement(line)
+    svg.save(saveas + 'feeth-lines.svg')
 
-def part2d_tooth(dataset=images.tooth_sml, values=None, saveas="output/part2d/"):
-    pass
+def part2e(dataset=images.tooth, values=None, saveas="output/part2e/"):
+    #values = list(np.hstack((np.linspace(0,5000,num=3), np.array([15000]), np.linspace(38000,42000, num=1), np.linspace(60000,63000,num=2))))
+    values = map(float, [15000, 38000, 42000, 60000]) # 42000, 
+    WHITE = hsl2rgb(0, 0, 100)
+    YELLOW = hsl2rgb(60, 75, 70)
+    RED = hsl2rgb(0,50,50)
+    def f(line, val, (i,j)):
+        return make_line(line, color=WHITE if val > 45000 else YELLOW if val > 20000 else RED, width=2 if val != 42000 else 1)
 
-def part2d_teddy(dataset=images.teddy_sml, values=None, saveas="output/part2d/"):
-    pass
+    if not os.path.exists(saveas): os.mkdir(saveas)
+    Image.fromarray(np.zeros((161,94), dtype='int32'), mode='I').save(saveas + 'solid-bg.png')
+    svg = write_svg(Options(fname=saveas + 'solid-bg.png', aspect=(1,1)), 'tooth-lines', scale=1.)
+    for line in param_isocontours(dataset, values, f):
+        svg.addElement(line)
+    svg.save(saveas + 'tooth-lines.svg')
+
+def part2f(dataset=images.teddy, values=None, saveas="output/part2f/"):
+    MAXWIDTH = 3.
+    # < 3000 background
+    # 9000 ~ 11000 fur
+    # 12000 ~ 16000 seams
+    # 63000 ~ 65000 eyes, nose
+    values  = list(np.hstack((np.linspace(0,65535,num=30),)))
+    gm = grad_mag(png_to_ndarray(dataset.fname), dataset.aspect)
+    gm_scale = MAXWIDTH / gm.max()
+    def f(line, val, (i,j)):
+        width = gm[i:i+2,j:j+2].sum() * gm_scale * .25
+        return make_line(line, width=width, color="rgb(0,0,0)")
+
+
+    if not os.path.exists(saveas): os.mkdir(saveas)
+    Image.fromarray(np.zeros((161,94), dtype='int32'), mode='I').save(saveas + 'solid-bg.png')
+    #svg = write_svg(Options(fname=saveas + 'solid-bg.png', aspect=(1,1)), 'teddy-lines', scale=1.)
+    svg = builders.svg('teddy-lines')
+    for line in param_isocontours(dataset, values, f):
+        svg.addElement(line)
+    svg.save(saveas + 'teddy-lines.svg')
 
 
 #==============================================================================
