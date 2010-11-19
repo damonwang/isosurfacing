@@ -319,7 +319,7 @@ MP_THRESH = 1000000
 def mp_draw_isocontours(data, isovalues):
     if data.nbytes > MP_THRESH:
         workers = Pool(MP_PROCMAX)
-        return itertools.chain(*workers.map(mp_wrap_draw_lines, [ (chunk, isovalues) for chunk in data_chunks(data, chunksize=len(data)/MP_PROCMAX)]))
+        return itertools.chain(*workers.map(mp_wrap_draw_lines, [ (chunk, isovalues) for chunk in data_chunks(data)]))
     else: return itertools.chain(*[draw_lines(data, val) for val in isovalues ])
 
 def test_lines():
@@ -327,7 +327,7 @@ def test_lines():
         g = np.array(i, dtype='int32').reshape((2,2))
         yield (g, draw_lines(g, .5))
 
-def overlay_isocontours(dataset, isovalues, name, scale=1):
+def overlay_isocontours(dataset, isovalues, name, scale=1, drawfn=mp_draw_isocontours):
     aspect = scale * np.array(dataset.aspect)
     data = png_to_ndarray(dataset.fname)
     shb = builders.ShapeBuilder()
@@ -340,12 +340,30 @@ def overlay_isocontours(dataset, isovalues, name, scale=1):
     out.addElement(grp)
     translation = np.array([.5, .5])
     #for l in itertools.chain(overlay_isocontours.workers.map(LineDrawer(data), isovalues)):
-    for l in mp_draw_isocontours(data, isovalues):
+    for l in drawfn(data, isovalues):
         l = [ aspect[::-1] * (p + translation) for p in l ]
         out.addElement(shb.createLine(l[1][1], l[1][0], l[0][1], l[0][0], strokewidth=2, stroke="rgb(0,255,0)"))
     return out
 
+def swap_fors((data, values, origin)):
+    lines = []
+    r,c = data.shape
+    for i, j in cartesian(xrange(r-1), xrange(c-1)):
+        top_left = np.array((i,j)) + origin
+        for val in values:
+            for l in lookup[tuple((data[i:i+2,j:j+2] > val).flatten())]:
+                points = []
+                for s in l:
+                    weight = (val - data[i+s[0][0],j+s[0][1]]) / (data[i+s[1][0], j+s[1][1]] - data[i+s[0][0], j+s[0][1]])
+                    points.append(top_left + s[0] + weight*(s[1] - s[0]))
+                lines.append(Line(*points))
+    return lines
 
+def mp_swap_fors(data, isovalues):
+    if data.nbytes > MP_THRESH:
+        workers = Pool(MP_PROCMAX)
+        return itertools.chain(*workers.map(swap_fors, [ (chunk, isovalues, origin) for chunk, origin in data_chunks(data)]))
+    else: return itertools.chain(*[draw_lines(data, val) for val in isovalues ])
 
 #==============================================================================
 # Run these functions to solve Part 2
