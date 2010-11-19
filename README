@@ -1,0 +1,13 @@
+This is my work for the second project in Gordon Kindlmann's Scientific
+Visualisations course (CMSC 23710) at the Univ. of Chicago.
+
+This project has three branches:
+
+* master: what I submitted for my project.
+
+* multiproc: an unsuccessful attempt at improving runtime by parallel execution
+  using Python's multiprocessing module.
+
+* interactive: the interesting one, where I am currently trying to make a
+  wxPython application that lets the user interactively choose the isovalues
+  and see the isocontours immediately
