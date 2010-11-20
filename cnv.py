@@ -45,15 +45,6 @@ def png_to_ndarray(filename): # pragma: no cover
     except ValueError: # rgb data?
         return np.array(im.getdata()).reshape(im.size[::-1] + (3,))
 
-def index_to_world(data, M):
-    '''index_to_world(ndarray data, matrix M) -> ndarray
-    '''
-
-    M = M.I.T
-    M = np.array([M[0,0], M[1,1]])
-
-    return np.array([ [ M * col for col in row ] for row in data ])
-
 #==============================================================================
 # Functions for Part 2
 
@@ -100,32 +91,6 @@ lookup = { (False, False, False, False) : [],
         (True, True, True, False) : [ Line(R, B) ],
         (True, True, True, True) : [] }
 
-def draw_lines(data, val):
-    '''draw_lines(ndarray data, val) -> [ Line ]
-
-    Runs marching squares and returns a list of the Lines to be drawn
-    '''
-
-    lines = []
-    r, c = data.shape
-    for i, j in product(xrange(r-1), xrange(c-1)):
-        top_left = np.array((i, j))
-        for l in lookup[tuple((data[i:i+2,j:j+2] > val).flatten())]:
-            points = []
-            for s in l:
-                # calculate a weight, and then use it to average the given points
-                weight = (val - data[i+s[0][0],j+s[0][1]]) / (data[i+s[1][0], j+s[1][1]] - data[i+s[0][0], j+s[0][1]])
-                #code.interact(local=locals())
-                points.append(top_left + s[0] + weight*(s[1] - s[0]))
-                #print Options(top_left=top_left, s=s, weight=weight)
-            lines.append(Line(*points))
-    return lines
-
-def test_lines():
-    for i in product([False, True], repeat=4):
-        g = np.array(i, dtype='int32').reshape((2,2))
-        yield (g, draw_lines(g, .5))
-
 def write_svg(dataset, name, scale=1, img=True):
     '''write_svg(Options dataset, str name, num scale) -> SVG'''
 
@@ -142,31 +107,6 @@ def write_svg(dataset, name, scale=1, img=True):
     grp.addElement(img)
     out.addElement(grp)
     return out
-
-def overlay_isocontours(dataset, isovalues, svg, **kwargs):
-    '''overlay_isocontours(Options dataset, list isovalues, SVG svg, **kwargs) -> SVG
-
-    keywords:
-    scale (default 1)
-    colors (default green): a string of the form "rgb(red, green, blue)"
-    widths (default 1)
-
-    isovalues, colors, and widths get zipped together, so to specify color of
-    ith isocontour, put that color in the ith element of the colors list.
-    '''
-    options = Options(scale=1, colors=repeat("rgb(0,255,0)"), 
-            widths=repeat(1))
-    options.update(kwargs)
-
-    aspect = options.scale * np.array(dataset.aspect)
-    shift = np.array([0.5, 0.5])
-    data = png_to_ndarray(dataset.fname)
-    shb = builders.ShapeBuilder()
-    for val, color, width in zip(isovalues, options.colors, options.widths):
-        for l in draw_lines(data, val):
-            l = [ aspect[::-1] * ( p + shift) for p in l ]
-            svg.addElement(shb.createLine(l[1][1], l[1][0], l[0][1], l[0][0], strokewidth=width, stroke=color))
-    return svg
 
 shb = builders.ShapeBuilder()
 def make_line(l, width=1, color="rgb(0,255,0)"): 
@@ -207,12 +147,6 @@ def param_isocontours(dataset, isovalues, scale=1., **kwargs):
                     #print Options(top_left=top_left, s=s, weight=weight)
                 yield IsoSeg(start=points[0], end=points[1], isovalue=val)
 
-def hsl2rgb(h, s, l):
-    return "rgb(%d,%d,%d)" % ImageColor.getrgb("hsl(%d,%d%%,%d%%)" % (h,s,l))
-
-def mask(min, max):
-    return np.vectorize(lambda x: x if x > min and x < max else 0)
-
 def part2a(dataset=images.noise, value=40000., saveas="output/part2a/"):
     if not os.path.exists(saveas): os.mkdir(saveas)
     svg = write_svg(dataset, 'noise-lines', scale=37.5)
@@ -236,7 +170,6 @@ def part2c(dataset=images.mich_sml, values=None, saveas="output/part2c/"):
     data = png_to_ndarray(dataset.fname)
     r, c = data.shape
     minmax = np.array([ (a.min(), a.max()) for a in grid(data) ]).reshape((r-1, c-1, 2))
-    print >> sys.stderr, "ready..."
     for line in param_isocontours(dataset, values or list(np.linspace(15000,
         31700, num=5)), data=data, minmax=minmax):
         svg.addElement(f(*line))
