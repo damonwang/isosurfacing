@@ -3,7 +3,7 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-.. highlight:: python
+.. highlight:: cython
    :linenothreshold: 5
 
 =======================
@@ -122,7 +122,9 @@ how to draw the isocontour through that region: ::
             (True, True, True, True) : [] }
 
 The performance is pretty bad: 16 CPU seconds in ``param_isocontours``
-and 26 overall. ::
+and 26 overall. 
+
+.. code-block:: none
 
     Sat Nov 20 15:05:44 2010    Profile.prof
 
@@ -170,8 +172,9 @@ checks every element of the ``data`` array, but now we're doing linear
 work at C speed instead of Python speed.
 
 This one algorithmic improvement saves us 14 CPU seconds in
-``param_isocontours`` and 22 overall. **This is more than all the
-subsequence Cython tweaking combined.** ::
+``param_isocontours`` and 22 overall. 
+
+.. code-block:: none
 
     Sat Nov 20 13:29:36 2010    Profile.prof
 
@@ -186,9 +189,9 @@ subsequence Cython tweaking combined.** ::
          5613    0.044    0.000    0.380    0.000 cnv.py:225(f)
          5613    0.044    0.000    0.336    0.000 cnv.py:172(make_line)
 
-------
-Cython
-------
+-------------------------
+Cython: 3.8 seconds saved
+-------------------------
 
 Cython is very Python-like language which drops a few higher-level
 features like generators but provides an (optional) C-like type system.
@@ -228,8 +231,10 @@ became ::
 
 Interestingly enough, moving to Cython actually makes
 ``param_isocontours`` slightly slower, although the overall time drops a
-few hundredths of a second. ::
+few hundredths of a second. 
 
+
+.. code-block:: none
 
     Sat Nov 20 17:15:06 2010    Profile.prof
 
@@ -283,7 +288,9 @@ pure C functions. ::
                 rv[i,j,1] = max4(data[i,j], data[i,j+1], data[i+1, j], data[i+1, j+1])
         return rv
 
-So with five minutes of effort I have saved 1.6 seconds of execution. ::
+So with five minutes of effort, I have saved 1.6 seconds of execution.
+
+.. code-block:: none
 
     Sat Nov 20 17:51:25 2010    Profile.prof
 
@@ -304,7 +311,123 @@ So with five minutes of effort I have saved 1.6 seconds of execution. ::
 param_isocontours: 1.895s to .197s
 -----------------------------------------------
 
-Rewriting
+Rewriting ``param_isocontours`` is a bit more involved, because here the
+heavy Python calls actually get a lot of work done.
+
+Previously, I had used :meth:`collections.namedtuple` to pass three
+kinds of data: 
+
+1. sides of a square, defined by the indices of two corners
+2. lines to draw, defined by two sides of the square 
+3. intersections of a square and an isocontour, defined by two lines and
+   an isovalue
+
+But that required a heavy Python object to carry, in the best case, a
+few bytes and, in the worst case, four bits. So I devised a new
+representation using C types:
+
+1. since squares are 2-by-2, the corner indices are at most 1 and a side
+   can be represented by four bits---two for the indices of each end
+2. two sides, therefore, fit into a ``char``
+3. intersections required doubles for the corner coordinates, so I
+   defined a C struct
+
+Then it was just a matter of laboriously rewriting ``param_isocontours``
+as a loop around C-style ``find_isoseg`` function which computed the
+intersection of one isocontour with one square. In order to avoid the
+overhead of several thousand calls to :meth:`numpy.interp`, a custom
+``lin_interp`` function was written in Cython. 
+
+Note that not only did I just hack out over two hundred lines of Cython to
+replace three lines of (Numpy-assisted) Python, but those two hundred
+lines are about as readable and expressive as straight C. ::
+
+    cdef inline int get_bits(int c, int i, int width):
+        return (c >> (i * width)) & ~( ~0 << width)
+
+    cdef void lin_interp(int val, double * r, double * c, Side_t s,
+            Py_ssize_t i, Py_ssize_t j, int* data_arr):
+
+        cdef int r0 = get_bits(s, 3, 1)
+        cdef int c0 = get_bits(s, 2, 1)
+        cdef int r1 = get_bits(s, 1, 1)
+        cdef int c1 = get_bits(s, 0, 1)
+        cdef int y0 = data_arr[2 * r0 + c0]
+        cdef int y1 = data_arr[2 * r1 + c1]
+        cdef double weight = ((val - y0) / <double>(y1 - y0))
+
+        r[0]  = i + .5 + r0 + weight * ( r1 - r0 )
+        c[0] = j + .5 + c0 + weight * (c1 - c0)
+
+    cdef IsoSeg_t segments[2]
+
+    def find_isoseg(int val, np.ndarray[np.int32_t, ndim=2] data, 
+            object aspect_obj, Py_ssize_t i, Py_ssize_t j):
+        cdef char case = (data[i, j] > val) << 3
+        case |= (data[i, j+1] > val) << 2
+        case |= (data[i+1, j] > val) << 1
+        case |= (data[i+1, j+1] > val)
+
+        cdef Intersect_t isect = lookup[case]
+
+        cdef int data_arr[4]
+        cdef int m, n
+        for m in xrange(2):
+            for n in xrange(2):
+                data_arr[2*m + n] = data[i+m, j+n]
+        cdef double r1, c1, r2, c2
+        cdef np.ndarray[np.float64_t, ndim=1] aspect = aspect_obj
+
+        lin_interp(val, &r1, &c1, get_bits(isect, 3, SIZEOF_SIDE), i, j, data_arr)
+        lin_interp(val, &r2, &c2, get_bits(isect, 2, SIZEOF_SIDE), i, j, data_arr)
+
+        IsoSeg(aspect[0] * r1, aspect[1] * c1, aspect[0] * r2,
+           aspect[1] * c2, val, &segments[0])
+
+        if get_bits(isect, 0, SIZEOF_LINE) != 0:
+           lin_interp(val, &r1, &c1, get_bits(isect, 1, SIZEOF_SIDE), i, j, data_arr)
+           lin_interp(val, &r2, &c2, get_bits(isect, 0, SIZEOF_SIDE), i, j, data_arr)
+
+           IsoSeg(aspect[0] * r1, aspect[0] * c1, aspect[1] * r2, aspect[1]
+                  * c2, val, &segments[1])
+           return 2
+        else: return 1
+
+    cdef isoseg_to_tuple(IsoSeg_t seg):
+        return ((seg.start[0], seg.start[1]), (seg.end[0], seg.end[1]),
+                seg.isovalue)
+
+    def param_isocontours(np.ndarray[np.int32_t, ndim=2] data,  
+            object aspect, object minmax, 
+            int nvals, np.ndarray[np.int32_t] isovals):
+
+        '''param_isocontours(Options dataset, list isovalues, function (Line line, isovalue, (i,j) -> A) f) yields A 
+
+        Computes the line segments for each isocontour and calls f with these arguments:
+        Line line: the line segment
+        isovalue
+        tuple (i,j): the indices of the top left corner of the grid square containing the line segment
+        '''
+
+        #cdef np.ndarray[np.int32_t, ndim=3] minmax_buf = minmax
+        cdef Py_ssize_t n, i, j
+        cdef int k, val, nsegs
+
+        lines = []
+        shift = np.array([.5,.5])
+        for n in xrange(nvals):
+            val = isovals[n]
+            for i, j in np.array(np.where(np.logical_and(minmax[...,0] < val, minmax[...,1] > val))).transpose():
+                nsegs = find_isoseg(val, data, aspect, i, j)
+                for k in xrange(nsegs):
+                    lines.append(isoseg_to_tuple(segments[k]))
+        return lines
+
+So with several hours of work, I have saved a futher 1.6 seconds of
+execution. On the bright side, the only function of mine which appears
+in the top five is now an I/O call! 
+
+.. code-block:: none
 
     Sun Nov 21 01:45:08 2010    Profile.prof
 
@@ -331,3 +454,45 @@ Rewriting
         37213    0.018    0.000    0.018    0.000 cy_cnv.pyx:137(max4)
         37213    0.018    0.000    0.018    0.000 cy_cnv.pyx:129(min4)
          5613    0.017    0.000    0.322    0.000 cy_cnv.pyx:277(f)
+
+-----------------------------------
+Minimal profiling: .2 seconds saved
+-----------------------------------
+
+And, just for vanity's sake, one run with profiling disabled on all the
+functions that get called repeatedly:
+
+.. code-block:: none
+
+    Sun Nov 21 02:50:58 2010    Profile.prof
+
+             264604 function calls (258989 primitive calls) in 1.515 CPU seconds
+
+       Ordered by: internal time
+
+       ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+            2    0.426    0.213    0.447    0.224 cy_cnv.pyx:43(png_to_ndarray)
+       5616/1    0.303    0.000    0.610    0.610 core.py:49(getXML)
+        28075    0.169    0.000    0.296    0.000 core.py:111(quote_attrib)
+        84225    0.087    0.000    0.087    0.000 {method 'replace' of 'str' objects}
+         5613    0.079    0.000    0.138    0.000 shape.py:252(__init__)
+            1    0.070    0.070    0.077    0.077 cy_cnv.pyx:239(param_isocontours)
+         5613    0.061    0.000    0.275    0.000 builders.py:137(createLine)
+         5613    0.054    0.000    0.060    0.000 builders.py:291(getStyle)
+        28088    0.040    0.000    0.040    0.000 {isinstance}
+            1    0.034    0.034    1.515    1.515 cy_cnv.pyx:279(part2c)
+         5613    0.031    0.000    0.307    0.000 cy_cnv.pyx:129(make_line)
+         5613    0.016    0.000    0.323    0.000 cy_cnv.pyx:274(f)
+
+So really, ``param_isocontour`` is down to .077s, not .197s as
+previously reported.
+
+----------
+Conclusion
+----------
+
+I started with a naive algorithm in Python, saved 14 seconds via a
+(slightly) smarter algorithm, and then saved another 4 seconds by
+rewriting several functions in Cython in a C-like style. Probably the
+correct conclusion is that this sort of nitpicky hand-optimization is
+not worth the time.
