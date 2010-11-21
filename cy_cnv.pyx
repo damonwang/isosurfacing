@@ -16,6 +16,7 @@ import sys
 
 cimport numpy as np
 from stdlib cimport *
+import cython
 
 #==============================================================================
 # General
@@ -57,6 +58,7 @@ cdef struct IsoSeg_t:
     int isovalue
 
 # dynamic allocation!
+@cython.profile(False)
 cdef inline void IsoSeg(double r1, double c1, double r2, double c2,
         int isovalue, IsoSeg_t * rv):
     rv[0].start[0] = r1
@@ -105,6 +107,7 @@ lookup[13] = Intersect(Line(L, B), 0)
 lookup[14] = Intersect(Line(R, B), 0)
 lookup[15] = Intersect(0, 0)
 
+@cython.profile(False)
 def write_svg(dataset, name, scale=1, img=True):
     '''write_svg(Options dataset, str name, num scale) -> SVG'''
 
@@ -126,6 +129,7 @@ shb = builders.ShapeBuilder()
 def make_line(l, width=1, color="rgb(0,255,0)"): 
     return shb.createLine(l[1][1], l[1][0], l[0][1], l[0][0], strokewidth=width, stroke=color)
 
+@cython.profile(False)
 cdef inline int min4(int a, int b, int c, int d): 
     cdef int rv
     rv = a
@@ -134,6 +138,7 @@ cdef inline int min4(int a, int b, int c, int d):
     if d < rv: rv = d
     return rv
 
+@cython.profile(False)
 cdef inline int max4(int a, int b, int c, int d): 
     cdef int rv
     rv = a
@@ -172,14 +177,14 @@ def unpack_params(dataset, isovalues, scale=1., **kwargs):
 
     return rv
 
+@cython.profile(False)
 cdef inline int get_bits(int c, int i, int width):
     return (c >> (i * width)) & ~( ~0 << width)
 
+@cython.profile(False)
 cdef void lin_interp(int val, double * r, double * c, Side_t s,
         Py_ssize_t i, Py_ssize_t j, int* data_arr):
-        #np.ndarray[np.int32_t, ndim=2] data, aspect, s, int i, int j, top_left):
-    # calculate a weight, and then use it to average the given points
-    #weight = (val - data[i+s[0][0],j+s[0][1]]) / (data[i+s[1][0], j+s[1][1]] - data[i+s[0][0], j+s[0][1]])
+
     cdef int r0 = get_bits(s, 3, 1)
     cdef int c0 = get_bits(s, 2, 1)
     cdef int r1 = get_bits(s, 1, 1)
@@ -190,18 +195,10 @@ cdef void lin_interp(int val, double * r, double * c, Side_t s,
 
     r[0]  = i + .5 + r0 + weight * ( r1 - r0 )
     c[0] = j + .5 + c0 + weight * (c1 - c0)
-    #code.interact(local=locals())
-    #return aspect * (top_left + s[0] + weight*(s[1] - s[0]))
 
 cdef IsoSeg_t segments[2]
 
-def str_case(char c):
-    return ''.join([ '+' if get_bits(c, i, 1) else '-' for i in range(3, -1, -1) ])
-
-def str_isect(Intersect_t isect, lookup={1:'T', 2:'L', 7:'R', 11:'B'}):
-    return ' '.join([ lookup.get(get_bits(isect, k, SIZEOF_SIDE), '') 
-        for k in range(3, -1, -1) ])
-
+@cython.profile(False)
 def find_isoseg(int val, np.ndarray[np.int32_t, ndim=2] data, 
         object aspect_obj, Py_ssize_t i, Py_ssize_t j):
     cdef char case = (data[i, j] > val) << 3
@@ -234,8 +231,7 @@ def find_isoseg(int val, np.ndarray[np.int32_t, ndim=2] data,
        return 2
     else: return 1
 
-
-
+@cython.profile(False)
 cdef isoseg_to_tuple(IsoSeg_t seg):
     return ((seg.start[0], seg.start[1]), (seg.end[0], seg.end[1]),
             seg.isovalue)
