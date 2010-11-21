@@ -19,20 +19,18 @@ speed, so Prof. Kindlmann suggested two improvements:
 
 2. use `Cython`_
 
-I implemented these suggestions in four phases:
-
-1. mimic the suggested data structure using Numpy's logical indexing
-2. port to Cython
-3. port to C using Cython's seamless FFI and implement the full data
-   structure (forthcoming)
-4. demonstrate the improved speed by writing an interactive topographical map
-   in WxPython (forthcoming)
+So I implemented them.
 
 The code for this project is available on GitHub_
 
 .. code-block:: bash
 
     git clone git@github.com:damonwang/isosurfacing.git
+
+Note that the git repository is contaminated by files from an
+interactive WxPython topo map application that I meant to implement on
+top of my new and improved isocontour code. That's probably not going to
+happen.
 
 .. _Marching Cubes: http://en.wikipedia.org/wiki/Marching_cubes
 .. _Shen96: http://ieeexplore.ieee.org/iel3/4271/12277/00568121.pdf?arnumber=568121
@@ -420,8 +418,8 @@ lines are about as readable and expressive as straight C. ::
         return lines
 
 So with several hours of work, I have saved a futher 1.6 seconds of
-execution. On the bright side, the only function of mine which appears
-in the top five is now an I/O call! 
+execution, and now the only function of mine which appears in the top
+five is now an I/O call. 
 
 .. code-block:: none
 
