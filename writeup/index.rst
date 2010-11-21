@@ -10,16 +10,6 @@
 Interactive Isocontours
 =======================
 
-Contents:
-
-.. toctree::
-   :maxdepth: 2
-
-
--------------
-Introduction
--------------
-
 This is an extension of Project 3 from Prof. Kindlmann's Scientific
 Visualization course (CMSC 23710), which required a two-dimensional
 implementation of the `Marching Cubes`_ algorithm. I was disappointed by the
@@ -31,17 +21,23 @@ speed, so Prof. Kindlmann suggested two improvements:
 
 I implemented these suggestions in four phases:
 
-1. implemented a hacky version of the suggested data structure using Numpy's
-   logical indexing
-2. moved to Cython
-3. moved to C using Cython's seamless FFI and implemented the full data
+1. mimic the suggested data structure using Numpy's logical indexing
+2. port to Cython
+3. port to C using Cython's seamless FFI and implement the full data
    structure (forthcoming)
 4. demonstrate the improved speed by writing an interactive topographical map
-   in WxPytho (forthcoming)
+   in WxPython (forthcoming)
+
+The code for this project is available on GitHub_
+
+.. code-block:: bash
+
+    git clone git@github.com:damonwang/isosurfacing.git
 
 .. _Marching Cubes: http://en.wikipedia.org/wiki/Marching_cubes
 .. _Shen96: http://ieeexplore.ieee.org/iel3/4271/12277/00568121.pdf?arnumber=568121
 .. _Cython: http://docs.cython.org/src/quickstart/overview.html
+.. _GitHub: https://github.com/damonwang/isosurfacing/tree/interactive
 
 A few conventions:
 
@@ -487,6 +483,85 @@ functions that get called repeatedly:
 So really, ``param_isocontour`` is down to .077s, not .197s as
 previously reported.
 
+-----------------------------------------------
+imread instead of Image.open: .35 seconds saved
+-----------------------------------------------
+
+I replaced 
+
+.. code-block:: cython
+
+    def png_to_ndarray(filename): # pragma: no cover
+        '''png_to_ndarray(str filename) -> ndarray
+        '''
+
+        im = Image.open(filename)
+        try:
+            return np.array(im.getdata()).reshape(im.size[::-1])
+        except ValueError: # rgb data?
+            return np.array(im.getdata
+
+with the matplotlib equivalent:
+
+.. code-block:: cython
+
+    def png_to_ndarray(filename): # pragma: no cover
+        '''png_to_ndarray(str filename) -> ndarray 
+        '''
+
+        rv = imread(filename)
+        if rv.ndim == 2:
+            rv *= 65535
+            return rv.astype('int32')
+        else:
+            rv *= 256
+            return rv.astype('int32')
+
+And now I/O is no longer my single most expensive operation.
+
+.. code-block:: none
+
+    Sun Nov 21 03:47:17 2010    Profile.prof
+
+             263906 function calls (258291 primitive calls) in 1.184 CPU seconds
+
+       Ordered by: internal time
+
+       ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+       5616/1    0.314    0.000    0.612    0.612 core.py:49(getXML)
+        28075    0.167    0.000    0.285    0.000 core.py:111(quote_attrib)
+         5613    0.099    0.000    0.174    0.000 shape.py:252(__init__)
+            1    0.089    0.089    0.099    0.099 cy_cnv.pyx:243(param_isocontours)
+        84225    0.078    0.000    0.078    0.000 {method 'replace' of 'str' objects}
+         5613    0.070    0.000    0.335    0.000 builders.py:137(createLine)
+         5613    0.065    0.000    0.072    0.000 builders.py:291(getStyle)
+        28077    0.040    0.000    0.040    0.000 {isinstance}
+            1    0.039    0.039    1.184    1.184 cy_cnv.pyx:283(part2c)
+         5613    0.037    0.000    0.372    0.000 cy_cnv.pyx:133(make_line)
+         5613    0.020    0.000    0.392    0.000 cy_cnv.pyx:278(f)
+         5618    0.019    0.000    0.019    0.000 {method 'keys' of 'dict' objects}
+         5616    0.017    0.000    0.036    0.000 core.py:81(setKWARGS)
+         5615    0.016    0.000    0.020    0.000 core.py:40(addElement)
+         5616    0.015    0.000    0.015    0.000 core.py:26(__init__)
+        11229    0.015    0.000    0.015    0.000 {method 'items' of 'dict' objects}
+            2    0.011    0.005    0.011    0.005 {built-in method read_png}
+        11154    0.010    0.000    0.010    0.000 numpy.pxd:187(__getbuffer__)
+         5613    0.010    0.000    0.010    0.000 builders.py:186(__init__)
+         5613    0.008    0.000    0.008    0.000 attributes.py:62(set_style)
+         5613    0.007    0.000    0.007    0.000 shape.py:271(set_x1)
+         5613    0.006    0.000    0.006    0.000 shape.py:286(set_y2)
+         5613    0.006    0.000    0.006    0.000 shape.py:276(set_y1)
+         5613    0.005    0.000    0.005    0.000 shape.py:281(set_x2)
+         5616    0.005    0.000    0.005    0.000 {len}
+         5622    0.004    0.000    0.004    0.000 {method 'append' of 'list' objects}
+            2    0.004    0.002    0.015    0.007 cy_cnv.pyx:45(png_to_ndarray)
+            1    0.003    0.003    0.003    0.003 {method 'write' of 'file' objects}
+            1    0.002    0.002    0.002    0.002 cy_cnv.pyx:154(make_minmax)
+            1    0.001    0.001    0.001    0.001 core.py:95(wrap_xml)
+            1    0.000    0.000    0.617    0.617 core.py:102(save)
+            1    0.000    0.000    0.106    0.106 cy_cnv.pyx:165(unpack_params)
+
+
 ----------
 Conclusion
 ----------
@@ -494,5 +569,6 @@ Conclusion
 I started with a naive algorithm in Python, saved 14 seconds via a
 (slightly) smarter algorithm, and then saved another 4 seconds by
 rewriting several functions in Cython in a C-like style. Probably the
-correct conclusion is that this sort of nitpicky hand-optimization is
-not worth the time.
+correct conclusion is that this sort of nitpicky hand-optimization
+should come only after all possible algorithmic improvements have been
+considered.

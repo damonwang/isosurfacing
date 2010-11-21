@@ -14,6 +14,8 @@ import ImageColor
 import cm
 import sys
 
+from matplotlib.pyplot import imread
+
 cimport numpy as np
 from stdlib cimport *
 import cython
@@ -44,11 +46,13 @@ def png_to_ndarray(filename): # pragma: no cover
     '''png_to_ndarray(str filename) -> ndarray 
     '''
 
-    im = Image.open(filename)
-    try: 
-        return np.array(im.getdata()).reshape(im.size[::-1])
-    except ValueError: # rgb data?
-        return np.array(im.getdata()).reshape(im.size[::-1] + (3,))
+    rv = imread(filename)
+    if rv.ndim == 2:
+        rv *= 65535
+        return rv.astype('int32')
+    else:
+        rv *= 256
+        return rv.astype('int32')
 
 #==============================================================================
 # Functions for Part 2
