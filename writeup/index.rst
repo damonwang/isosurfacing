@@ -6,20 +6,22 @@
 .. highlight:: cython
    :linenothreshold: 5
 
-=======================
-Interactive Isocontours
-=======================
+==================
+Faster Isocontours
+==================
 
 This is an extension of Project 3 from Prof. Kindlmann's Scientific
 Visualization course (CMSC 23710), which required a two-dimensional
 implementation of the `Marching Cubes`_ algorithm. I was disappointed by the
-speed, so Prof. Kindlmann suggested two improvements:
+speed, and Prof. Kindlmann suggested two improvements:
 
 1. use the Span Space algorithm with Row/Column representation [Shen96_]
 
 2. use `Cython`_
 
-So I implemented them.
+So I implemented them. The first took five minutes of work and saved 14 seconds
+of execution time. The second took most of a day and saved 4.3 seconds
+of execution time. I should probably have stopped after the first.
 
 The code for this project is available on GitHub_
 
@@ -27,10 +29,11 @@ The code for this project is available on GitHub_
 
     git clone git@github.com:damonwang/isosurfacing.git
 
-Note that the git repository is contaminated by files from an
-interactive WxPython topo map application that I meant to implement on
-top of my new and improved isocontour code. That's probably not going to
-happen.
+The relevant file is ``cy_cnv.pyx``.
+
+Please ignore the other files---they are left over from an interactive
+WxPython topo map application that I meant to implement on top of my new
+and improved isocontour code. That's probably not going to happen. 
 
 .. _Marching Cubes: http://en.wikipedia.org/wiki/Marching_cubes
 .. _Shen96: http://ieeexplore.ieee.org/iel3/4271/12277/00568121.pdf?arnumber=568121
