@@ -1,13 +1,15 @@
 #!/usr/bin/env python
 
 import pstats, cProfile
+import sys
 
-import pyximport
-pyximport.install()
+if len(sys.argv) > 1 and sys.argv[1] == '--pyx':
+    import pyximport
+    pyximport.install()
+    import cy_cnv as cnv
+else: import cnv
 
-import cy_cnv
-
-cProfile.runctx("cy_cnv.part2c()", globals(), locals(), "Profile.prof")
+cProfile.runctx("cnv.part2c()", globals(), locals(), "Profile.prof")
 
 s = pstats.Stats("Profile.prof")
 s.strip_dirs().sort_stats("time").print_stats()

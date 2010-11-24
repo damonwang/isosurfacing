@@ -7,7 +7,8 @@ import code
 import os
 from os import path
 import collections
-from itertools import repeat, product
+from itertools import repeat
+
 from pysvg import builders
 import ImageColor
 import cm
@@ -66,9 +67,10 @@ def grid(data):
 
 # these lambdas were the fastest way to recover from discovering that Techstaff
 # runs Python 2.5.2 which doesn't support named tuples
-Line = collections.namedtuple('Line', 'start end')
-IsoSeg = collections.namedtuple('IsoSeg', 'start end isovalue')
-Side = collections.namedtuple('Side', 'left right')
+IsoSeg = Side = Line = lambda *args: tuple(args)
+#Line = collections.namedtuple('Line', 'start end')
+#IsoSeg = collections.namedtuple('IsoSeg', 'start end isovalue')
+#Side = collections.namedtuple('Side', 'left right')
 T = Side(np.array((0,0)), np.array((0,1)))
 L = Side(np.array((0,0)), np.array((1,0)))
 R = Side(np.array((0,1)), np.array((1,1)))
@@ -112,17 +114,10 @@ shb = builders.ShapeBuilder()
 def make_line(l, width=1, color="rgb(0,255,0)"): 
     return shb.createLine(l[1][1], l[1][0], l[0][1], l[0][0], strokewidth=width, stroke=color)
 
-def param_isocontours(dataset, isovalues, scale=1., **kwargs):
-    '''param_isocontours(Options dataset, list isovalues, function (Line line, isovalue, (i,j) -> A) f) yields A 
-
-    Computes the line segments for each isocontour and calls f with these arguments:
-    Line line: the line segment
-    isovalue
-    tuple (i,j): the indices of the top left corner of the grid square containing the line segment
-    '''
+def unpack_params(fname, aspect, isovalues, scale=1., **kwargs):
 
     if 'data' not in kwargs:
-        data = png_to_ndarray(dataset.fname)
+        data = png_to_ndarray(fname)
     else: data = kwargs['data']
 
     if 'minmax' not in kwargs:
@@ -131,8 +126,18 @@ def param_isocontours(dataset, isovalues, scale=1., **kwargs):
             for a in grid(data) ]).reshape((r-1, c-1, 2))
     else: minmax = kwargs['minmax']
 
+    return param_isocontours(data, map(lambda x: scale * x, aspect), minmax, len(isovalues), isovalues)
+
+def param_isocontours(data, aspect, minmax, nvals, isovalues):
+    '''param_isocontours(Options dataset, list isovalues, function (Line line, isovalue, (i,j) -> A) f) yields A 
+
+    Computes the line segments for each isocontour and calls f with these arguments:
+    Line line: the line segment
+    isovalue
+    tuple (i,j): the indices of the top left corner of the grid square containing the line segment
+    '''
     lines = []
-    aspect = scale * np.array(dataset.aspect)
+    aspect = np.array(aspect)
     shift = np.array([.5,.5])
     for val in isovalues:
         for i, j in np.array(np.where(np.logical_and(minmax[...,0] < val, minmax[...,1] > val))).transpose():
@@ -145,7 +150,12 @@ def param_isocontours(dataset, isovalues, scale=1., **kwargs):
                     #code.interact(local=locals())
                     points.append(aspect[::-1] * (top_left + s[0] + weight*(s[1] - s[0])))
                     #print Options(top_left=top_left, s=s, weight=weight)
-                yield IsoSeg(start=points[0], end=points[1], isovalue=val)
+                yield IsoSeg(points[0], points[1], val)
+
+def make_minmax(data):
+    r, c = data.shape
+    return np.array([ (a.min(), a.max()) for a in grid(data) ]).reshape((r-1, c-1, 2))
+
 
 def part2a(dataset=images.noise, value=40000., saveas="output/part2a/"):
     if not os.path.exists(saveas): os.mkdir(saveas)
@@ -169,8 +179,8 @@ def part2c(dataset=images.mich_sml, values=None, saveas="output/part2c/"):
     svg = write_svg(Options(fname=colored_map, aspect=dataset.aspect), 'mich-lines', scale=1.)
     data = png_to_ndarray(dataset.fname)
     r, c = data.shape
-    minmax = np.array([ (a.min(), a.max()) for a in grid(data) ]).reshape((r-1, c-1, 2))
-    for line in param_isocontours(dataset, values or list(np.linspace(15000,
+    minmax = make_minmax(data)
+    for line in unpack_params(dataset.fname, dataset.aspect, values or list(np.linspace(15000,
         31700, num=5)), data=data, minmax=minmax):
         svg.addElement(f(*line))
     svg.save(path.join(saveas, 'mich-lines.svg'))
