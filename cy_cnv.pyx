@@ -20,6 +20,9 @@ cimport numpy as np
 from stdlib cimport *
 import cython
 
+# profiles inner functions
+__deep_profile__ = False
+
 #==============================================================================
 # General
 
@@ -62,7 +65,7 @@ cdef struct IsoSeg_t:
     int isovalue
 
 # dynamic allocation!
-@cython.profile(False)
+@cython.profile(__deep_profile__)
 cdef inline void IsoSeg(double r1, double c1, double r2, double c2,
         int isovalue, IsoSeg_t * rv):
     rv[0].start[0] = r1
@@ -111,7 +114,7 @@ lookup[13] = Intersect(Line(L, B), 0)
 lookup[14] = Intersect(Line(R, B), 0)
 lookup[15] = Intersect(0, 0)
 
-@cython.profile(False)
+@cython.profile(__deep_profile__)
 def write_svg(dataset, name, scale=1, img=True):
     '''write_svg(Options dataset, str name, num scale) -> SVG'''
 
@@ -133,7 +136,7 @@ shb = builders.ShapeBuilder()
 def make_line(l, width=1, color="rgb(0,255,0)"): 
     return shb.createLine(l[1][1], l[1][0], l[0][1], l[0][0], strokewidth=width, stroke=color)
 
-@cython.profile(False)
+@cython.profile(__deep_profile__)
 cdef inline int min4(int a, int b, int c, int d): 
     cdef int rv
     rv = a
@@ -142,7 +145,7 @@ cdef inline int min4(int a, int b, int c, int d):
     if d < rv: rv = d
     return rv
 
-@cython.profile(False)
+@cython.profile(__deep_profile__)
 cdef inline int max4(int a, int b, int c, int d): 
     cdef int rv
     rv = a
@@ -181,11 +184,11 @@ def unpack_params(dataset, isovalues, scale=1., **kwargs):
 
     return rv
 
-@cython.profile(False)
+@cython.profile(__deep_profile__)
 cdef inline int get_bits(int c, int i, int width):
     return (c >> (i * width)) & ~( ~0 << width)
 
-@cython.profile(False)
+@cython.profile(__deep_profile__)
 cdef void lin_interp(int val, double * r, double * c, Side_t s,
         Py_ssize_t i, Py_ssize_t j, int* data_arr):
 
@@ -202,7 +205,7 @@ cdef void lin_interp(int val, double * r, double * c, Side_t s,
 
 cdef IsoSeg_t segments[2]
 
-@cython.profile(False)
+@cython.profile(__deep_profile__)
 def find_isoseg(int val, np.ndarray[np.int32_t, ndim=2] data, 
         object aspect_obj, Py_ssize_t i, Py_ssize_t j):
     cdef char case = (data[i, j] > val) << 3
@@ -235,7 +238,7 @@ def find_isoseg(int val, np.ndarray[np.int32_t, ndim=2] data,
        return 2
     else: return 1
 
-@cython.profile(False)
+@cython.profile(__deep_profile__)
 cdef isoseg_to_tuple(IsoSeg_t seg):
     return ((seg.start[0], seg.start[1]), (seg.end[0], seg.end[1]),
             seg.isovalue)
