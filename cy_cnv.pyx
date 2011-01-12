@@ -32,6 +32,10 @@ class Options(dict):
     def __getattr__(self, name):
         return self.__getitem__(name)
 
+# aspect ratios are specified (fast-axis, slow-axis), so (1, 3) means the
+# samples are three times as widely spaced along the slow axis as on the fast.
+# This usually (e.g., in a web browser) means the picture looks vertically
+# squished when displayed improperly.
 images = Options(cone=Options(fname='data/cone.png', aspect=(1, 1)),
         point=Options(fname='data/point.png', aspect=(1, 1)),
         rings=Options(fname='data/rings.png', aspect=(1, 3)),
@@ -47,14 +51,16 @@ images = Options(cone=Options(fname='data/cone.png', aspect=(1, 1)),
 
 def png_to_ndarray(filename): # pragma: no cover
     '''png_to_ndarray(str filename) -> ndarray 
+
+    Returns int16's or int8's in dtype-int32 ndarrays to satisfy odd quirk in PIL.
     '''
 
     rv = imread(filename)
     if rv.ndim == 2:
-        rv *= 65535
+        rv *= 65535 #* maximum int16 value
         return rv.astype('int32')
     else:
-        rv *= 256
+        rv *= 256 #* maximum int8 value
         return rv.astype('int32')
 
 #==============================================================================
@@ -64,7 +70,6 @@ cdef struct IsoSeg_t:
     double start[2], end[2]
     int isovalue
 
-# dynamic allocation!
 @cython.profile(__deep_profile__)
 cdef inline void IsoSeg(double r1, double c1, double r2, double c2,
         int isovalue, IsoSeg_t * rv):
@@ -77,25 +82,30 @@ cdef inline void IsoSeg(double r1, double c1, double r2, double c2,
 # four bits: r0, c0, r1, c1
 ctypedef char Side_t 
 
-cdef Side_t T=1    # 0,0 -> 0,1
-cdef Side_t L=2    # 0,0 -> 1,0
-cdef Side_t R=7    # 0,1 -> 1,1
-cdef Side_t B=11   # 1,0 -> 1,1
+cdef Side_t T=1    # TOP    0,0 -> 0,1
+cdef Side_t L=2    # LEFT   0,0 -> 1,0
+cdef Side_t R=7    # RIGHT  0,1 -> 1,1
+cdef Side_t B=11   # BOTTOM 1,0 -> 1,1
 
-ctypedef char Line_t # eight bits
+ctypedef char Line_t # eight bits, two Sides
 
-cdef enum:
+cdef enum: # numerical constants
     SIZEOF_SIDE = 4
     SIZEOF_LINE = sizeof(Line_t) * 8
 
 cdef inline Line_t Line(Side_t start, Side_t end):
     return (start << SIZEOF_SIDE) | end
 
-ctypedef int Intersect_t 
+ctypedef int Intersect_t # four bytes, two used for two Lines
 
 cdef inline Intersect_t Intersect(Line_t a, Line_t b):
     return (a << SIZEOF_LINE) | b
 
+# 2D marching cubes table, with ambiguous cases drawn to connect the
+# higher-value corners. Keyed by this bit-string:
+#       MSB...top-left top-right bottom-left bottom-right...LSB
+# a 1 bit means that corner is above the isovalue
+    
 cdef Intersect_t lookup[16]
 lookup[0] = Intersect(0, 0)
 lookup[1] = Intersect(Line(R, B), 0)
@@ -155,6 +165,16 @@ cdef inline int max4(int a, int b, int c, int d):
     return rv
 
 def make_minmax(np.ndarray[np.int32_t, ndim=2] data, Py_ssize_t r, Py_ssize_t c):
+    '''
+    make_minmax(np.ndarray[np.int32_t, ndim=2] data, Py_ssize_t rows,
+        Py_ssize_t cols) -> ndarray
+
+    rows, cols: the shape of the data ndarray
+
+    Returns an ndarray where [i, j, 0] is the minimum and [i, j, 1] the maximum
+    of the four values at data[i:i+2,j:j+2].
+    '''
+
     cdef Py_ssize_t i, j
     cdef np.ndarray[np.int32_t, ndim=3] rv
 
@@ -166,6 +186,22 @@ def make_minmax(np.ndarray[np.int32_t, ndim=2] data, Py_ssize_t r, Py_ssize_t c)
     return rv
 
 def unpack_params(dataset, isovalues, scale=1., **kwargs):
+
+    '''unpack_params(Options dataset, list isovalues, float scale) -> [ line ]
+
+    A Python-side wrapper which calls param_isocontours to calculate the
+    isocontours at the given isovalues, returning a list specifying line
+    segments as tuples (x0, y0, x1, y1)
+
+    This function builds two intermediate data structures. For efficiency when
+    finding isocontours repeatedly on the same data, you can cache these
+    structures externally and pass them in using these keywords: 
+        data: an ndarray such as that returned by png_to_ndarray(dataset.fname)
+        minmax: an ndarray as that returned by make_minmax(data, *data.shape)
+    You should probably pass in neither or both, to avoid inconsistency.
+
+    Do NOT interpolate or resample `data` to force 1:1 aspect ratio. 
+    '''
 
     cdef int nvals = len(isovalues)
 
@@ -191,6 +227,23 @@ cdef inline int get_bits(int c, int i, int width):
 @cython.profile(__deep_profile__)
 cdef void lin_interp(int val, double * r, double * c, Side_t s,
         Py_ssize_t i, Py_ssize_t j, int* data_arr):
+    '''
+    lin_interp(int val, double * r, double * c, Side_t s,
+        Py_ssize_t i, Py_ssize_t j, int* data_arr) -> None
+
+    val: isovalue
+    r, c: pointers to places to write the type double results
+    s: the side along which to interpolate
+    i, j: index-space indices of the top-left value
+    data_arr: an array of length four containing top-left, top-right,
+        bottom-left, bottom-right values of a square, in that order
+
+    Linear interpolation for the index-space coordinates of the point along
+    side `s` of of the square with top-left index `i, j` where the data should
+    have value `val`.
+
+    Writes row, col to places in memory because C can't return two values. 
+    '''
 
     cdef int r0 = get_bits(s, 3, 1)
     cdef int c0 = get_bits(s, 2, 1)
@@ -208,6 +261,23 @@ cdef IsoSeg_t segments[2]
 @cython.profile(__deep_profile__)
 def find_isoseg(int val, np.ndarray[np.int32_t, ndim=2] data, 
         object aspect_obj, Py_ssize_t i, Py_ssize_t j):
+    '''
+    find_isoseg(int val, np.ndarray[np.int32_t, ndim=2] data, 
+        object aspect_obj, Py_ssize_t i, Py_ssize_t j) -> int
+
+    val: isovalue at which to draw the isocontour
+    data: data
+    aspect_obj: the float64 ndarray containing data's aspect ratio
+    i, j: the indices of the top-left of the square's four corners 
+
+    Returns the number of line segments in this square. The line segments
+    themselves are written into the global IsoSeg_t array `segments`
+    (therefore, this function is NOT re-entrant, in case that matters)
+
+    Note that the line segments are returned in world-space.
+    '''
+
+    # see the definition of `lookup` to understand this bit-twiddling
     cdef char case = (data[i, j] > val) << 3
     case |= (data[i, j+1] > val) << 2
     case |= (data[i+1, j] > val) << 1
@@ -246,13 +316,20 @@ cdef isoseg_to_tuple(IsoSeg_t seg):
 def param_isocontours(np.ndarray[np.int32_t, ndim=2] data,  
         object aspect, object minmax, 
         int nvals, np.ndarray[np.int32_t] isovals):
+    '''
+    param_isocontours(np.ndarray[np.int32_t, ndim=2] data,  
+        object aspect, object minmax, 
+        int nvals, np.ndarray[np.int32_t] isovals):
 
-    '''param_isocontours(Options dataset, list isovalues, function (Line line, isovalue, (i,j) -> A) f) yields A 
+    data: data
+    aspect: ndarray with aspect ratio of data
+    minmax: minmax structure from make_minmax
+    nvals: length of isovals array
+    isovals: isovalues at which to draw isocontours
 
-    Computes the line segments for each isocontour and calls f with these arguments:
-    Line line: the line segment
-    isovalue
-    tuple (i,j): the indices of the top left corner of the grid square containing the line segment
+    Returns a Python list of tuples. See docstring for unpack_params.
+
+    Please call unpack_params instead. It is much friendlier.
     '''
 
     #cdef np.ndarray[np.int32_t, ndim=3] minmax_buf = minmax

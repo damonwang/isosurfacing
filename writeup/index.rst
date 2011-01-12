@@ -6,14 +6,17 @@
 .. highlight:: cython
    :linenothreshold: 5
 
-==================
-Faster Isocontours
-==================
+============================
+Isocontours, 285-fold Faster
+============================
 
-This is an extension of Project 3 from Prof. Kindlmann's Scientific
-Visualization course (CMSC 23710), which required a two-dimensional
-implementation of the `Marching Cubes`_ algorithm. I was disappointed by the
-speed, and Prof. Kindlmann suggested two improvements:
+This is an exercise in optimization where I use a combination of algorithmic
+improvements and Cython to bring run-time down from 16s to .089s.
+
+Project 3 from Prof. Kindlmann's Scientific Visualization course (CMSC 23710)
+required a two-dimensional implementation of the `Marching Cubes`_ algorithm. I
+was disappointed by the speed, and when I asked about this during office hours,
+Prof. Kindlmann suggested two improvements:
 
 1. use the Span Space algorithm with Row/Column representation [Shen96_]
 
@@ -21,9 +24,18 @@ speed, and Prof. Kindlmann suggested two improvements:
 
 So I implemented them. The first took five minutes of work and saved 14 seconds
 of execution time. The second took most of a day and saved 4.3 seconds
-of execution time. I should probably have stopped after the first.
+of execution time. 
 
-The code for this project is available on GitHub_
+.. _Marching Cubes: http://en.wikipedia.org/wiki/Marching_cubes
+.. _Shen96: http://ieeexplore.ieee.org/iel3/4271/12277/00568121.pdf?arnumber=568121
+.. _Cython: http://docs.cython.org/src/quickstart/overview.html
+
+--------
+The Code
+--------
+
+The code for this project is available on GitHub_. You can either view it in a
+web browser or pull it from the repository like this:
 
 .. code-block:: bash
 
@@ -31,14 +43,12 @@ The code for this project is available on GitHub_
 
 The relevant file is ``cy_cnv.pyx``.
 
-Please ignore the other files---they are left over from an interactive
-WxPython topo map application that I meant to implement on top of my new
-and improved isocontour code. That's probably not going to happen. 
+Please ignore the other files---they are the start of an interactive WxPython
+topo map application which I may implement over the summer for next year's
+Scientific Visualization.
 
-.. _Marching Cubes: http://en.wikipedia.org/wiki/Marching_cubes
-.. _Shen96: http://ieeexplore.ieee.org/iel3/4271/12277/00568121.pdf?arnumber=568121
-.. _Cython: http://docs.cython.org/src/quickstart/overview.html
 .. _GitHub: https://github.com/damonwang/isosurfacing/tree/interactive
+.. _cy_cnv.pyx_: https://github.com/damonwang/isosurfacing/blob/interactive/cy_cnv.pyx
 
 A few conventions:
 
@@ -508,14 +518,16 @@ with the matplotlib equivalent:
 
     def png_to_ndarray(filename): # pragma: no cover
         '''png_to_ndarray(str filename) -> ndarray 
+
+        Returns int16's or int8's in dtype-int32 ndarrays to satisfy odd quirk in PIL.
         '''
 
         rv = imread(filename)
         if rv.ndim == 2:
-            rv *= 65535
+            rv *= 65535 #* maximum int16 value
             return rv.astype('int32')
         else:
-            rv *= 256
+            rv *= 256 #* maximum int8 value
             return rv.astype('int32')
 
 And now I/O is no longer my single most expensive operation.
@@ -573,3 +585,28 @@ rewriting several functions in Cython in a C-like style. Probably the
 correct conclusion is that this sort of nitpicky hand-optimization
 should come only after all possible algorithmic improvements have been
 considered.
+
+------------------------
+A few thoughts on Cython
+------------------------
+
+This was a fun little weekend project. I was pleasantly surprised by how easy it
+was to pick up Cython, and smoothly and continuously I could transition between
+an expressive and multiparadigm but slow Python implementation to a low-level
+and necessarily procedural but fast Cython implementation. This is the chief
+advantage Cython offers me over competitors such as Weave and f2py, which force
+me to choose one side or the other of the foreign-function interface. 
+
+This isn't the first time I've vaguely wanted Python to support (optional) type
+hints, but this may be the first time I've found myself writing Python and
+wishing I were writing Haskell. This project required me to work with
+coordinates in two different spaces (the data is accessed in the space of array
+indices and the isocontours must be drawn in world-space for display) but it's
+all ints and floats to Python's duck typing. While writing the original project,
+I lost track of how many times I found myself with distorted output because
+somewhere I multiplied by the M matrix instead of M-inverse-transpose. That's
+exactly the sort of dumb mistake Haskell would catch at compile-time.
+
+It's not worth sacrificing the multiparadigm flexibility, though. Functional and
+imperative are both good ways to approach a problem, but choosing between them
+at my will is *great*.
