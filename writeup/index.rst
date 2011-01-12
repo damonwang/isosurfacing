@@ -590,23 +590,23 @@ considered.
 A few thoughts on Cython
 ------------------------
 
-This was a fun little weekend project. I was pleasantly surprised by how easy it
-was to pick up Cython, and smoothly and continuously I could transition between
-an expressive and multiparadigm but slow Python implementation to a low-level
-and necessarily procedural but fast Cython implementation. This is the chief
-advantage Cython offers me over competitors such as Weave and f2py, which force
-me to choose one side or the other of the foreign-function interface. 
-
 This isn't the first time I've vaguely wanted Python to support (optional) type
 hints, but this may be the first time I've found myself writing Python and
 wishing I were writing Haskell. This project required me to work with
 coordinates in two different spaces (the data is accessed in the space of array
-indices and the isocontours must be drawn in world-space for display) but it's
-all ints and floats to Python's duck typing. While writing the original project,
-I lost track of how many times I found myself with distorted output because
-somewhere I multiplied by the M matrix instead of M-inverse-transpose. That's
-exactly the sort of dumb mistake Haskell would catch at compile-time.
+indices and the isocontours must be drawn in world-space for display) but
+they're all ints and floats to Python's duck typing. While writing the original
+project, I lost track of how many times I found myself with distorted output
+because somewhere I multiplied by the M matrix instead of M-inverse-transpose.
+That's exactly the sort of dumb mistake Haskell would catch at compile-time.
 
 It's not worth sacrificing the multiparadigm flexibility, though. Functional and
 imperative are both good ways to approach a problem, but choosing between them
-at my will is *great*.
+at will is *great*.
+
+For much the same reason, I was delighted by how smoothly and continuously I
+could transition between an expressive and multiparadigm but slow Python
+implementation to a low-level and necessarily procedural but fast Cython
+implementation. This is the chief advantage Cython offers me over competitors
+such as Weave and f2py, which force me to choose one side or the other of the
+foreign-function interface. 
